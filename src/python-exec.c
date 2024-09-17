@@ -13,6 +13,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <libgen.h>
 
 #ifdef HAVE_READLINK
 #	include <limits.h>
@@ -548,7 +549,28 @@ static void load_configuration(const char* scriptname)
  */
 static void execute(char* script, char** argv)
 {
+	char *env_path, *path, *script_path, *updated_path;
+
+	/* dirname requires copy of path as it may modify it */
+	path = calloc(strlen(script) + 1, sizeof(char));
+	strcpy(path, script);
+	script_path = dirname(path);
+
+	env_path = getenv("PATH");
+	/* + 1 for ':' */
+	updated_path = calloc(strlen(env_path) + strlen(script_path) + 1 + 1, sizeof(char));
+
+	strcat(updated_path, env_path);
+	strncat(updated_path, ":", 1);
+	strcat(updated_path, script_path);
+	free(path);
+
+	setenv("PATH", updated_path, 1);
+	free(updated_path);
+
 	execv(script, argv);
+	/* reset PATH to initial value */
+	setenv("PATH", env_path, 1);
 
 	/* warn about other errors but try hard to run something */
 	if (errno != ENOENT && isatty(fileno(stderr)))
